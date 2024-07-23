@@ -87,7 +87,7 @@ with gr.Blocks() as pdf_analysis:
 
 # Define the interface for the third tab (DOI Mode)
 with gr.Blocks() as doi_mode:
-    gr.Markdown("### SciNoBo Field of Science (FoS) Classification - DOI Mode")
+    gr.Markdown("### SciNoBo Citance Analysis - DOI Mode")
     doi_input = gr.Textbox(label="DOI", placeholder="Enter a valid Digital Object Identifier")
     process_doi_button = gr.Button("Process")
     doi_output = gr.JSON(label="Output")
