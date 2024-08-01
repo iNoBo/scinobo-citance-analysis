@@ -258,13 +258,33 @@ def find_semantics_batch(citances):
     return classify_text_batch(prompts=prompts, choices=choices, top_k=256, **json_data['gen_config'])
 
 
-def find_citations(text, stopwords=cit_stopwords):
+def find_citations_old(text, stopwords=cit_stopwords):
     # TODO: some of the matches are duplicates
     matches_0 = re.findall(r'[[(][^\]\[)(]*?et al.*?(?:\]|\)|$)', text)
     matches_1 = re.findall(r'(\[\s*\d+\s*(?!\s*(?:\w|[^\w,\-\]])|\s*,\d+(?:[^\w,\-\]]))\s*?(?:\]|$))', text)
     matches_1b = re.findall(r'(\[\s*[A-Z](?:\w+\s+(?:\&\s+)?){1,}\d+\s*(?:\]|$))', text)
     matches_2 = re.findall(r'(\(\s*\d+\s*(?!\s*(?:\w|[^\w,\-\)])|\s*,\d+(?:[^\w,\-\)]))\s*?(?:\)|$))', text)
     matches_2b = re.findall(r'(\(\s*[A-Z](?:\w+\s+(?:\&\s+)?){1,}\d+\s*(?:\)|$))', text)
+    # 1b, 2b are noisy, remove some stopwords
+    matches_1b = [e for e in matches_1b if not any([e2.lower().strip() in stopwords for e2 in e.split()])]
+    matches_2b = [e for e in matches_2b if not any([e2.lower().strip() in stopwords for e2 in e.split()])]
+    return matches_0, matches_1, matches_1b, matches_2, matches_2b
+
+
+def find_citations(text, stopwords=cit_stopwords):
+    # TODO: some of the matches are duplicates
+    matches_0 = re.findall(r'[[(][^\]\[)(]*?et al.*?(?:\]|\)|$)', text)
+    matches_1 = re.findall(r'(\[\s*\d+\s*(?!\s*(?:\w|[^\w,\-\]])|\s*,\d+(?:[^\w,\-\]]))\s*?(?:\]|$))', text)
+    matches_1b = re.findall(r'(\[\s*[A-Z](?:\w+\s+(?:\&\s+)?){1,}\d+\s*(?:\]|$))', text)
+    matches_1c = re.findall(r'(\[\s*(?:(?:\d+(?:-\d+)?)(?:\s*,\s*(?:\d+(?:-\d+)?))*)\s*\])', text)
+    matches_2 = re.findall(r'(\(\s*\d+\s*(?!\s*(?:\w|[^\w,\-\)])|\s*,\d+(?:[^\w,\-\)]))\s*?(?:\)|$))', text)
+    matches_2b = re.findall(r'(\(\s*[A-Z](?:\w+\s+(?:\&\s+)?){1,}\d+\s*(?:\)|$))', text)
+    matches_2c = re.findall(r'(\(\s*(?:(?:\d+(?:-\d+)?)(?:\s*,\s*(?:\d+(?:-\d+)?))*)\s*\))', text)
+
+    # Matches [1 and 1c] , [2 and 2c] can be combined
+    matches_1 = list(set(matches_1 + matches_1c))
+    matches_2 = list(set(matches_2 + matches_2c))
+
     # 1b, 2b are noisy, remove some stopwords
     matches_1b = [e for e in matches_1b if not any([e2.lower().strip() in stopwords for e2 in e.split()])]
     matches_2b = [e for e in matches_2b if not any([e2.lower().strip() in stopwords for e2 in e.split()])]
