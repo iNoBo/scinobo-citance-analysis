@@ -271,17 +271,42 @@ def find_citations_old(text, stopwords=cit_stopwords):
     return matches_0, matches_1, matches_1b, matches_2, matches_2b
 
 
+def remove_overlapping_matches(matches):
+    # Sort matches by their start position and then by length (longer first)
+    matches = sorted(matches, key=lambda m: (m.start(), -(m.end() - m.start())))
+
+    # Matches that do not overlap
+    filtered_matches = []
+    # End position of the last match added to filtered_matches
+    prev_end = -1
+    # Start position of the last match added to filtered_matches
+    prev_start = -1
+
+    # Iterate over matches
+    for match in matches:
+        # Start and end positions of the current match
+        start, end = match.start(), match.end()
+        # Only add match if it is not completely inside the last match
+        if not (start >= prev_start and end <= prev_end):
+            # Add the current match to filtered_matches
+            filtered_matches.append(match)
+            # Update the start and end position of the last match added
+            prev_start, prev_end = start, end
+
+    return filtered_matches
+
+
 def find_citations(text, stopwords=cit_stopwords):
     # TODO: some of the matches are duplicates
-    matches_0 = re.findall(r'[[(][^\]\[)(]*?et\s+al.*?(?:\]|\)|$)', text)
-    matches_0b = re.findall(r'((?<!\S)[A-Z][a-zA-Z]*\s+et\s+al.\s*(?:[\(\[](?:[\d\-–\.\,\sp]|\d{4}\w)+[\)\]])?)', text)
-    matches_0c = re.findall(r'([\(\[](?:\s*e\.g\.,?)?\s*[A-Z][a-zA-Z]*\s*,?\s*(?:[\d\-–\.\,\sp]|\d{4}\w)+[\)\]])', text)
-    matches_1 = re.findall(r'(\[\s*\d+\s*(?!\s*(?:\w|[^\w,\-\]])|\s*,\d+(?:[^\w,\-\]]))\s*?(?:\]|$))', text)
-    matches_1b = re.findall(r'(\[\s*[A-Z](?:\w+\s+(?:\&\s+)?){1,}\d+\s*(?:\]|$))', text)
-    matches_1c = re.findall(r'(\[\s*(?:(?:\d+(?:[\-–]\d+)?)(?:\s*,\s*(?:\d+(?:[\-–]\d+)?))*)\s*\])', text)
-    matches_2 = re.findall(r'(\(\s*\d+\s*(?!\s*(?:\w|[^\w,\-\)])|\s*,\d+(?:[^\w,\-\)]))\s*?(?:\)|$))', text)
-    matches_2b = re.findall(r'(\(\s*[A-Z](?:\w+\s+(?:\&\s+)?){1,}\d+\s*(?:\)|$))', text)
-    matches_2c = re.findall(r'(\(\s*(?:(?:\d+(?:[\-–]\d+)?)(?:\s*,\s*(?:\d+(?:[\-–]\d+)?))*)\s*\))', text)
+    matches_0 = list(re.finditer(r'[[(][^\]\[)(]*?et\s+al.*?(?:\]|\)|$)', text))
+    matches_0b = list(re.finditer(r'((?<!\S)[A-Z][a-zA-Z]*\s+et\s+al.\s*(?:[\(\[](?:[\d\-–\.\,\sp]|\d{4}\w)+[\)\]])?)', text))
+    matches_0c = list(re.finditer(r'([\(\[](?!\s*[A-Z]+\s*[\)\]])(?:\s*e\.g\.,?)?\s*[A-Z][a-zA-Z]*\s*,?\s*(?:[\d\-–\.\,\sp]|\d{4}\w)+[\)\]])', text))
+    matches_1 = list(re.finditer(r'(\[\s*\d+\s*(?!\s*(?:\w|[^\w,\-\]])|\s*,\d+(?:[^\w,\-\]]))\s*?(?:\]|$))', text))
+    matches_1b = list(re.finditer(r'(\[\s*[A-Z](?:\w+\s+(?:\&\s+)?){1,}\d+\s*(?:\]|$))', text))
+    matches_1c = list(re.finditer(r'(\[\s*(?:(?:\d+(?:[\-–]\d+)?)(?:\s*,\s*(?:\d+(?:[\-–]\d+)?))*)\s*\])', text))
+    matches_2 = list(re.finditer(r'(\(\s*\d+\s*(?!\s*(?:\w|[^\w,\-\)])|\s*,\d+(?:[^\w,\-\)]))\s*?(?:\)|$))', text))
+    matches_2b = list(re.finditer(r'(\(\s*[A-Z](?:\w+\s+(?:\&\s+)?){1,}\d+\s*(?:\)|$))', text))
+    matches_2c = list(re.finditer(r'(\(\s*(?:(?:\d+(?:[\-–]\d+)?)(?:\s*,\s*(?:\d+(?:[\-–]\d+)?))*)\s*\))', text))
 
     # Matches [0, 0b, 0c] and be combined
     matches_0 = list(set(matches_0 + matches_0b + matches_0c))
@@ -291,9 +316,19 @@ def find_citations(text, stopwords=cit_stopwords):
     matches_2 = list(set(matches_2 + matches_2c))
 
     # 1b, 2b are noisy, remove some stopwords
-    matches_1b = [e for e in matches_1b if not any([e2.lower().strip() in stopwords for e2 in e.split()])]
-    matches_2b = [e for e in matches_2b if not any([e2.lower().strip() in stopwords for e2 in e.split()])]
-    return matches_0, matches_1, matches_1b, matches_2, matches_2b
+    matches_1b = [e for e in matches_1b if not any([e2.lower().strip() in stopwords for e2 in e.group().split()])]
+    matches_2b = [e for e in matches_2b if not any([e2.lower().strip() in stopwords for e2 in e.group().split()])]
+
+    # Get all matches
+    all_matches = set(matches_0 + matches_1 + matches_1b + matches_2 + matches_2b)
+
+    # Remove overlapping matches
+    all_matches = remove_overlapping_matches(all_matches)
+
+    # Keep only the match text
+    all_matches = [m.group() for m in all_matches]
+
+    return all_matches
 
 
 def find_pis(citance, citation_mark):
@@ -337,8 +372,7 @@ def find_pis_batch(citances):
 
 
 def find_mark_pis(citance):
-    matches_0, matches_1, matches_1b, matches_2, matches_2b = find_citations(citance)
-    citation_marks = sorted(set(matches_0 + matches_1 + matches_1b + matches_2 + matches_2b))
+    citation_marks = find_citations(citance)
     results = {}
     citances = []
     for citation_mark in citation_marks:
@@ -350,8 +384,7 @@ def find_mark_pis(citance):
 
 
 def get_citation_marks(citance):
-    matches_0, matches_1, matches_1b, matches_2, matches_2b = find_citations(citance)
-    citation_marks = sorted(set(matches_0 + matches_1 + matches_1b + matches_2 + matches_2b))
+    citation_marks = find_citations(citance)
     return citation_marks
 
 
@@ -409,8 +442,7 @@ def extract_citances_pis(pdf_file, xml_mode=False):
 
 
 def find_mark_pis_parquet(citance):
-    matches_0, matches_1, matches_1b, matches_2, matches_2b = find_citations(citance)
-    citation_marks = sorted(set(matches_0 + matches_1 + matches_1b + matches_2 + matches_2b))
+    citation_marks = find_citations(citance)
     # Add an empty citation mark
     citation_marks.append('')
     results = {}
