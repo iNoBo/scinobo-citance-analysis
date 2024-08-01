@@ -273,13 +273,18 @@ def find_citations_old(text, stopwords=cit_stopwords):
 
 def find_citations(text, stopwords=cit_stopwords):
     # TODO: some of the matches are duplicates
-    matches_0 = re.findall(r'[[(][^\]\[)(]*?et al.*?(?:\]|\)|$)', text)
+    matches_0 = re.findall(r'[[(][^\]\[)(]*?et\s+al.*?(?:\]|\)|$)', text)
+    matches_0b = re.findall(r'((?<!\S)[A-Z][a-zA-Z]*\s+et\s+al.\s*(?:[\(\[][\d\-–\.\,\sp]+[\)\]])?)', text)
+    matches_0c = re.findall(r'([\(\[][A-Z][a-zA-Z]*\s*,?\s*[\d\-–\.\,\sp]+[\)\]])', text)
     matches_1 = re.findall(r'(\[\s*\d+\s*(?!\s*(?:\w|[^\w,\-\]])|\s*,\d+(?:[^\w,\-\]]))\s*?(?:\]|$))', text)
     matches_1b = re.findall(r'(\[\s*[A-Z](?:\w+\s+(?:\&\s+)?){1,}\d+\s*(?:\]|$))', text)
-    matches_1c = re.findall(r'(\[\s*(?:(?:\d+(?:-\d+)?)(?:\s*,\s*(?:\d+(?:-\d+)?))*)\s*\])', text)
+    matches_1c = re.findall(r'(\[\s*(?:(?:\d+(?:[\-–]\d+)?)(?:\s*,\s*(?:\d+(?:[\-–]\d+)?))*)\s*\])', text)
     matches_2 = re.findall(r'(\(\s*\d+\s*(?!\s*(?:\w|[^\w,\-\)])|\s*,\d+(?:[^\w,\-\)]))\s*?(?:\)|$))', text)
     matches_2b = re.findall(r'(\(\s*[A-Z](?:\w+\s+(?:\&\s+)?){1,}\d+\s*(?:\)|$))', text)
-    matches_2c = re.findall(r'(\(\s*(?:(?:\d+(?:-\d+)?)(?:\s*,\s*(?:\d+(?:-\d+)?))*)\s*\))', text)
+    matches_2c = re.findall(r'(\(\s*(?:(?:\d+(?:[\-–]\d+)?)(?:\s*,\s*(?:\d+(?:[\-–]\d+)?))*)\s*\))', text)
+
+    # Matches [0, 0b, 0c] and be combined
+    matches_0 = list(set(matches_0 + matches_0b + matches_0c))
 
     # Matches [1 and 1c] , [2 and 2c] can be combined
     matches_1 = list(set(matches_1 + matches_1c))
