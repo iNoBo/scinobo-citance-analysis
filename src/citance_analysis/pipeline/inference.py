@@ -7,6 +7,7 @@ SCINOBO CITANCE ANALYSIS BULK INFERENCE SCRIPT
 import os
 import re
 import json
+import gzip
 import fnmatch
 import argparse
 import requests
@@ -455,7 +456,7 @@ def find_mark_pis_parquet(citance):
     return results
 
 
-def infer_parquet(input_dir, output_dir, filter_input=None):
+def infer_parquet(input_dir, output_dir, filter_input=None, compress_output=False):
     print("Input DIR with Parquet files...")
     print(input_dir)
 
@@ -490,15 +491,19 @@ def infer_parquet(input_dir, output_dir, filter_input=None):
                 'results': results
             })
         
-        with open(os.path.join(output_dir, parquet_file.replace('.parquet', '.json')), 'w', encoding='utf-8') as fout:
+        if compress_output:
+            with gzip.open(os.path.join(output_dir, parquet_file.replace('.parquet', '.json.gz')), 'wt', encoding='utf-8') as fout:
                 json.dump(all_outputs, fout, indent=1)
+        else:
+            with open(os.path.join(output_dir, parquet_file.replace('.parquet', '.json')), 'w', encoding='utf-8') as fout:
+                    json.dump(all_outputs, fout, indent=1)
 
         print("Parquet processed and results saved in the output directory...")
         print(output_dir)
         print("Done!")
 
 
-def infer_pdf(input_dir, output_dir, xml_mode=False, filter_input=None):
+def infer_pdf(input_dir, output_dir, xml_mode=False, filter_input=None, compress_output=False):
     if xml_mode:
         print("Input DIR with TEI XML files...")
     else:
@@ -525,12 +530,20 @@ def infer_pdf(input_dir, output_dir, xml_mode=False, filter_input=None):
         pdf_metadata = extract_citances_pis(pdf_path, xml_mode)
 
         # Save the results
-        if xml_mode:
-            with open(os.path.join(output_dir, pdf_file.replace('.xml', '.json')), 'w', encoding='utf-8') as fout:
-                json.dump(pdf_metadata, fout, indent=1)
+        if compress_output:
+            if xml_mode:
+                with gzip.open(os.path.join(output_dir, pdf_file.replace('.xml', '.json.gz')), 'wt', encoding='utf-8') as fout:
+                    json.dump(pdf_metadata, fout, indent=1)
+            else:
+                with gzip.open(os.path.join(output_dir, pdf_file.replace('.pdf', '.json.gz')), 'wt', encoding='utf-8') as fout:
+                    json.dump(pdf_metadata, fout, indent=1)
         else:
-            with open(os.path.join(output_dir, pdf_file.replace('.pdf', '.json')), 'w', encoding='utf-8') as fout:
-                json.dump(pdf_metadata, fout, indent=1)
+            if xml_mode:
+                with open(os.path.join(output_dir, pdf_file.replace('.xml', '.json')), 'w', encoding='utf-8') as fout:
+                    json.dump(pdf_metadata, fout, indent=1)
+            else:
+                with open(os.path.join(output_dir, pdf_file.replace('.pdf', '.json')), 'w', encoding='utf-8') as fout:
+                    json.dump(pdf_metadata, fout, indent=1)
 
     if xml_mode:
         print("TEI XMLs processed and results saved in the output directory...")
@@ -547,12 +560,13 @@ def main():
     parser.add_argument('--xml_mode', action='store_true', help='Process TEI XML files instead of PDF files.')
     parser.add_argument('--parquet_mode', action='store_true', help='Run the pipeline for parquet files instead of PDFs that contain the columns: "id", "citation_mentions" .')
     parser.add_argument('--filter_input', type=str, help='Wildcard pattern to filter input files to analyze.')
+    parser.add_argument('--compress_output', action='store_true', help='Compress the output json files to reduce space.')
     args = parser.parse_args()
 
     if args.parquet_mode:
-        infer_parquet(args.input_dir, args.output_dir, args.filter_input)
+        infer_parquet(args.input_dir, args.output_dir, args.filter_input, args.compress_output)
     else:
-        infer_pdf(args.input_dir, args.output_dir, args.xml_mode, args.filter_input)
+        infer_pdf(args.input_dir, args.output_dir, args.xml_mode, args.filter_input, args.compress_output)
 
 
 if __name__ == '__main__':
