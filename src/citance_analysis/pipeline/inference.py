@@ -8,6 +8,7 @@ import os
 import re
 import json
 import gzip
+import regex
 import fnmatch
 import argparse
 import requests
@@ -297,38 +298,48 @@ def remove_overlapping_matches(matches):
     return filtered_matches
 
 
-def find_citations(text, stopwords=cit_stopwords):
-    # TODO: some of the matches are duplicates
-    matches_0 = list(re.finditer(r'[[(][^\]\[)(]*?et\s+al.*?(?:\]|\)|$)', text))
-    matches_0b = list(re.finditer(r'((?<!\S)[A-Z][a-zA-Z]*\s+et\s+al.\s*(?:[\(\[](?:[\d\-–\.\,\sp]|\d{4}\w)+[\)\]])?)', text))
-    matches_0c = list(re.finditer(r'([\(\[](?!\s*[A-Z]+\s*[\)\]])(?:\s*e\.g\.,?)?\s*[A-Z][a-zA-Z]*\s*,?\s*(?:[\d\-–\.\,\sp]|\d{4}\w)+[\)\]])', text))
-    matches_1 = list(re.finditer(r'(\[\s*\d+\s*(?!\s*(?:\w|[^\w,\-\]])|\s*,\d+(?:[^\w,\-\]]))\s*?(?:\]|$))', text))
-    matches_1b = list(re.finditer(r'(\[\s*[A-Z](?:\w+\s+(?:\&\s+)?){1,}\d+\s*(?:\]|$))', text))
-    matches_1c = list(re.finditer(r'(\[\s*(?:(?:\d+(?:[\-–]\d+)?)(?:\s*,\s*(?:\d+(?:[\-–]\d+)?))*)\s*\])', text))
-    matches_2 = list(re.finditer(r'(\(\s*\d+\s*(?!\s*(?:\w|[^\w,\-\)])|\s*,\d+(?:[^\w,\-\)]))\s*?(?:\)|$))', text))
-    matches_2b = list(re.finditer(r'(\(\s*[A-Z](?:\w+\s+(?:\&\s+)?){1,}\d+\s*(?:\)|$))', text))
-    matches_2c = list(re.finditer(r'(\(\s*(?:(?:\d+(?:[\-–]\d+)?)(?:\s*,\s*(?:\d+(?:[\-–]\d+)?))*)\s*\))', text))
-
-    # Matches [0, 0b, 0c] and be combined
-    matches_0 = list(set(matches_0 + matches_0b + matches_0c))
-
-    # Matches [1 and 1c] , [2 and 2c] can be combined
-    matches_1 = list(set(matches_1 + matches_1c))
-    matches_2 = list(set(matches_2 + matches_2c))
-
-    # 1b, 2b are noisy, remove some stopwords
-    matches_1b = [e for e in matches_1b if not any([e2.lower().strip() in stopwords for e2 in e.group().split()])]
-    matches_2b = [e for e in matches_2b if not any([e2.lower().strip() in stopwords for e2 in e.group().split()])]
-
+def find_citations(text, stopwords=cit_stopwords, timeout=3):
+    """Find citations in text with a timeout to prevent hanging."""
+    # Define patterns
+    patterns = {
+        '0': r'[[(][^\]\[)(]*?et\s+al.*?(?:\]|\)|$)',
+        '0b': r'((?<!\S)[A-Z][a-zA-Z]*\s+et\s+al.\s*(?:[\(\[](?:[\d\-–\.\,\sp]|\d{4}\w)+[\)\]])?)',
+        '0c': r'([\(\[](?!\s*[A-Z]+\s*[\)\]])(?:\s*e\.g\.,?)?\s*[A-Z][a-zA-Z]*\s*,?\s*(?:[\d\-–\.\,\sp]|\d{4}\w)+[\)\]])',
+        '1': r'(\[\s*\d+\s*(?!\s*(?:\w|[^\w,\-\]])|\s*,\d+(?:[^\w,\-\]]))\s*?(?:\]|$))',
+        '1b': r'(\[\s*[A-Z](?:\w+\s+(?:\&\s+)?){1,}\d+\s*(?:\]|$))',
+        '1c': r'(\[\s*(?:(?:\d+(?:[\-–]\d+)?)(?:\s*,\s*(?:\d+(?:[\-–]\d+)?))*)\s*\])',
+        '2': r'(\(\s*\d+\s*(?!\s*(?:\w|[^\w,\-\)])|\s*,\d+(?:[^\w,\-\)]))\s*?(?:\)|$))',
+        '2b': r'(\(\s*[A-Z](?:\w+\s+(?:\&\s+)?){1,}\d+\s*(?:\)|$))',
+        '2c': r'(\(\s*(?:(?:\d+(?:[\-–]\d+)?)(?:\s*,\s*(?:\d+(?:[\-–]\d+)?))*)\s*\))'
+    }
+    
+    # Apply each pattern with timeout
+    result_matches = {}
+    for key, pattern in patterns.items():
+        try:
+            result_matches[key] = list(regex.finditer(pattern, text, timeout=timeout))
+        except TimeoutError:
+            print(f"Pattern '{key}' timed out on text of length {len(text)}")
+            result_matches[key] = []
+    
+    # Extract matches
+    matches_0 = list(set(result_matches.get('0', []) + result_matches.get('0b', []) + result_matches.get('0c', [])))
+    matches_1 = list(set(result_matches.get('1', []) + result_matches.get('1c', [])))
+    matches_2 = list(set(result_matches.get('2', []) + result_matches.get('2c', [])))
+    
+    # Filter noisy matches
+    matches_1b = [e for e in result_matches.get('1b', []) if not any([e2.lower().strip() in stopwords for e2 in e.group().split()])]
+    matches_2b = [e for e in result_matches.get('2b', []) if not any([e2.lower().strip() in stopwords for e2 in e.group().split()])]
+    
     # Get all matches
     all_matches = set(matches_0 + matches_1 + matches_1b + matches_2 + matches_2b)
-
+    
     # Remove overlapping matches
     all_matches = remove_overlapping_matches(all_matches)
-
+    
     # Keep only the match text
     all_matches = [m.group() for m in all_matches]
-
+    
     return all_matches
 
 
