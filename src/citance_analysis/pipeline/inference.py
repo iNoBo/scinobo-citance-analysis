@@ -482,24 +482,28 @@ def infer_parquet(input_dir, output_dir, filter_input=None, compress_output=Fals
         parquet_files = fnmatch.filter(parquet_files, filter_input)
 
     # Read the parquet files
-    for parquet_file in tqdm(parquet_files):
+    for parquet_file in parquet_files:
         parquet_path = os.path.join(input_dir, parquet_file)
         parquet_df = pd.read_parquet(parquet_path)
 
         # Process each row
         all_outputs = []
-        for idx, row in tqdm(parquet_df.iterrows(), total=parquet_df.shape[0]):
-            cit_id = row['id']
-            cit_citances = row['citation_mentions']
+        for _, row in parquet_df.iterrows():
+            cit_citances = row['contexts']
             results = []
             for citance in cit_citances:
                 citance_results = find_mark_pis_parquet(citance)
                 results.append(citance_results)
             
             all_outputs.append({
-                'id': cit_id,
+                'citationid': row['citationid'],
                 'citation_mentions': cit_citances.tolist(),
-                'results': results
+                'results': results,
+                "source_id": row['source_id'],
+                "dest_id": row['dest_id'],
+                "source_doi": row['source_doi'],
+                "dest_doi": row['dest_doi'],
+                "isinfluential": row['isinfluential']
             })
         
         if compress_output:
@@ -569,7 +573,14 @@ def main():
     parser.add_argument('--input_dir', type=str, help='Directory with PDF/XML files to process.', required=True)
     parser.add_argument('--output_dir', type=str, help='Output directory to save the results.', required=True)
     parser.add_argument('--xml_mode', action='store_true', help='Process TEI XML files instead of PDF files.')
-    parser.add_argument('--parquet_mode', action='store_true', help='Run the pipeline for parquet files instead of PDFs that contain the columns: "id", "citation_mentions" .')
+    parser.add_argument(
+        '--parquet_mode', 
+        action='store_true', 
+        help=(
+            'Run the pipeline for parquet files that contain the columns: '
+            '"citationid", "contexts", "source_id", "dest_id", source_doi", "dest_doi", "isinfluential"'
+    )
+    )
     parser.add_argument('--filter_input', type=str, help='Wildcard pattern to filter input files to analyze.')
     parser.add_argument('--compress_output', action='store_true', help='Compress the output json files to reduce space.')
     args = parser.parse_args()
