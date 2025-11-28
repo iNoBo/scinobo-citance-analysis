@@ -13,6 +13,8 @@ import fnmatch
 import argparse
 import requests
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 from tqdm import tqdm
 from bs4 import BeautifulSoup
 
@@ -467,7 +469,7 @@ def find_mark_pis_parquet(citance):
     return results
 
 
-def infer_parquet(input_dir, output_dir, filter_input=None, compress_output=False):
+def infer_parquet_new_mode(input_dir, output_dir, output_format: str, filter_input=None, compress_output=False):
     print("Input DIR with Parquet files...")
     print(input_dir)
 
@@ -480,6 +482,31 @@ def infer_parquet(input_dir, output_dir, filter_input=None, compress_output=Fals
 
     if filter_input:
         parquet_files = fnmatch.filter(parquet_files, filter_input)
+
+    # Schema for parquet output. Keeps consistency for future spark reads.
+    scores_pa_schema = pa.struct([
+        pa.field("semantics", pa.list_(pa.float64()), nullable=False),
+        pa.field("intent", pa.list_(pa.float64()), nullable=False),
+        pa.field("polarity", pa.list_(pa.float64()), nullable=False),
+    ])
+
+    results_pa_schema = pa.struct([
+        pa.field("semantics", pa.string(), nullable=True),
+        pa.field("intent", pa.string(), nullable=True),
+        pa.field("polarity", pa.string(), nullable=True),
+        pa.field("scores", scores_pa_schema, nullable=False),
+    ])
+
+    pa_schema = pa.schema([
+        pa.field("citationid", pa.int64(), nullable=False),
+        pa.field("results", pa.list_(pa.map_(pa.string(), results_pa_schema)), nullable=True),
+        pa.field("citation_mentions", pa.list_(pa.string()), nullable=True),
+        pa.field("source_id", pa.int64(), nullable=True),
+        pa.field("dest_id", pa.int64(), nullable=True),
+        pa.field("source_doi", pa.string(), nullable=True),
+        pa.field("dest_doi", pa.string(), nullable=True),
+        pa.field("isinfluential", pa.bool_(), nullable=True),
+    ])
 
     # Read the parquet files
     for parquet_file in parquet_files:
@@ -504,6 +531,56 @@ def infer_parquet(input_dir, output_dir, filter_input=None, compress_output=Fals
                 "source_doi": row['source_doi'],
                 "dest_doi": row['dest_doi'],
                 "isinfluential": row['isinfluential']
+            })
+        
+        if output_format == 'parquet':
+            table = pa.Table.from_pylist(all_outputs, schema=pa_schema)
+            pq.write_table(table, os.path.join(output_dir, parquet_file))
+        elif compress_output:
+            with gzip.open(os.path.join(output_dir, parquet_file.replace('.parquet', '.json.gz')), 'wt', encoding='utf-8') as fout:
+                json.dump(all_outputs, fout, indent=1)
+        else:
+            with open(os.path.join(output_dir, parquet_file.replace('.parquet', '.json')), 'w', encoding='utf-8') as fout:
+                    json.dump(all_outputs, fout, indent=1)
+
+        print("Parquet processed and results saved in the output directory...")
+        print(output_dir)
+        print("Done!")
+
+
+def infer_parquet(input_dir, output_dir, filter_input=None, compress_output=False):
+    print("Input DIR with Parquet files...")
+    print(input_dir)
+
+    # Create the output directory if it does not exist
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # Filter the parquet files
+    parquet_files = [f for f in os.listdir(input_dir) if f.endswith('.parquet')]
+
+    if filter_input:
+        parquet_files = fnmatch.filter(parquet_files, filter_input)
+
+    # Read the parquet files
+    for parquet_file in tqdm(parquet_files):
+        parquet_path = os.path.join(input_dir, parquet_file)
+        parquet_df = pd.read_parquet(parquet_path)
+
+        # Process each row
+        all_outputs = []
+        for idx, row in tqdm(parquet_df.iterrows(), total=parquet_df.shape[0]):
+            cit_id = row['citationid']
+            cit_citances = row['contexts']
+            results = []
+            for citance in cit_citances:
+                citance_results = find_mark_pis_parquet(citance)
+                results.append(citance_results)
+            
+            all_outputs.append({
+                'id': cit_id,
+                'citation_mentions': cit_citances.tolist(),
+                'results': results
             })
         
         if compress_output:
@@ -579,14 +656,27 @@ def main():
         help=(
             'Run the pipeline for parquet files that contain the columns: '
             '"citationid", "contexts", "source_id", "dest_id", source_doi", "dest_doi", "isinfluential"'
+        )
     )
-    )
+    parser.add_argument("--output_format", type=str, help="Format of output files", default="json")
     parser.add_argument('--filter_input', type=str, help='Wildcard pattern to filter input files to analyze.')
     parser.add_argument('--compress_output', action='store_true', help='Compress the output json files to reduce space.')
+    parser.add_argument(
+        '--new_mode', 
+        action='store_true', 
+        help= (
+            'Use the new citance extraction mode. This means that citationid column is the primary key instead of '
+            'the old "id" column, and more columns will be available in the output files'
+        )
+    )
     args = parser.parse_args()
 
     if args.parquet_mode:
-        infer_parquet(args.input_dir, args.output_dir, args.filter_input, args.compress_output)
+        # TODO: Remove legacy mode when stable
+        if args.new_mode:
+            infer_parquet_new_mode(args.input_dir, args.output_dir, args.output_format, args.filter_input, args.compress_output)
+        else:
+            infer_parquet(args.input_dir, args.output_dir, args.filter_input, args.compress_output)
     else:
         infer_pdf(args.input_dir, args.output_dir, args.xml_mode, args.filter_input, args.compress_output)
 
