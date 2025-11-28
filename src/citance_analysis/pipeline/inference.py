@@ -548,7 +548,8 @@ def infer_parquet_new_mode(input_dir, output_dir, output_format: str, filter_inp
         print("Done!")
 
 
-def infer_parquet(input_dir, output_dir, filter_input=None, compress_output=False):
+def infer_parquet_legacy_mode(input_dir, output_dir, filter_input=None, compress_output=False):
+    """Temporary function to support the old parquet mode with 'id' output column instead of 'citationid'."""
     print("Input DIR with Parquet files...")
     print(input_dir)
 
@@ -676,7 +677,7 @@ def main():
         if args.new_mode:
             infer_parquet_new_mode(args.input_dir, args.output_dir, args.output_format, args.filter_input, args.compress_output)
         else:
-            infer_parquet(args.input_dir, args.output_dir, args.filter_input, args.compress_output)
+            infer_parquet_legacy_mode(args.input_dir, args.output_dir, args.filter_input, args.compress_output)
     else:
         infer_pdf(args.input_dir, args.output_dir, args.xml_mode, args.filter_input, args.compress_output)
 
