@@ -659,7 +659,7 @@ def main():
             '"citationid", "contexts", "source_id", "dest_id", source_doi", "dest_doi", "isinfluential"'
         )
     )
-    parser.add_argument("--output_format", type=str, help="Format of output files", default="json")
+    parser.add_argument("--output_format", type=str, choices=['json', 'parquet'], help="Format of output files", default="json")
     parser.add_argument('--filter_input', type=str, help='Wildcard pattern to filter input files to analyze.')
     parser.add_argument('--compress_output', action='store_true', help='Compress the output json files to reduce space.')
     parser.add_argument(
