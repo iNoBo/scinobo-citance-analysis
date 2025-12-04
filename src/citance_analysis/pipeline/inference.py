@@ -490,7 +490,7 @@ def infer_parquet_new_mode(input_dir, output_dir, output_format: str, filter_inp
         pa.field("polarity", pa.list_(pa.float64()), nullable=False),
     ])
 
-    results_pa_schema = pa.struct([
+    entry_pa_schema = pa.struct([
         pa.field("semantics", pa.string(), nullable=True),
         pa.field("intent", pa.string(), nullable=True),
         pa.field("polarity", pa.string(), nullable=True),
@@ -499,13 +499,8 @@ def infer_parquet_new_mode(input_dir, output_dir, output_format: str, filter_inp
 
     pa_schema = pa.schema([
         pa.field("citationid", pa.int64(), nullable=False),
-        pa.field("results", pa.list_(pa.map_(pa.string(), results_pa_schema)), nullable=True),
-        pa.field("citation_mentions", pa.list_(pa.string()), nullable=True),
-        pa.field("source_id", pa.int64(), nullable=True),
-        pa.field("dest_id", pa.int64(), nullable=True),
-        pa.field("source_doi", pa.string(), nullable=True),
-        pa.field("dest_doi", pa.string(), nullable=True),
-        pa.field("isinfluential", pa.bool_(), nullable=True),
+        pa.field("results", pa.list_(pa.map_(pa.string(), entry_pa_schema)), nullable=True),
+        pa.field("citation_mentions", pa.list_(pa.string()), nullable=True)
     ])
 
     # Read the parquet files
@@ -520,7 +515,20 @@ def infer_parquet_new_mode(input_dir, output_dir, output_format: str, filter_inp
             results = []
             for citance in cit_citances:
                 citance_results = find_mark_pis_parquet(citance)
-                results.append(citance_results)
+                
+                # Convert dictionaries to lists for each citation mark
+                converted_results = {}
+                for mark, data in citance_results.items():
+                    converted_data = data.copy()
+                    scores = data['scores']
+                    converted_data['scores'] = {
+                        'semantics': list(scores['semantics'].values()) if isinstance(scores['semantics'], dict) else scores['semantics'].tolist(),
+                        'intent': list(scores['intent'].values()) if isinstance(scores['intent'], dict) else scores['intent'].tolist(),
+                        'polarity': list(scores['polarity'].values()) if isinstance(scores['polarity'], dict) else scores['polarity'].tolist(),
+                    }
+                    converted_results[mark] = converted_data
+                
+                results.append(converted_results)
             
             all_outputs.append({
                 'citationid': row['citationid'],
@@ -528,7 +536,7 @@ def infer_parquet_new_mode(input_dir, output_dir, output_format: str, filter_inp
                 'results': results,
                 "source_id": row['id'],
                 "source_doi": row['doi'],
-                "dest_id": row['dest_id'],
+                "dest_id": row['dest'],
                 "dest_doi": row['dest_doi'],
                 "isinfluential": row['isinfluential']
             })
@@ -656,7 +664,7 @@ def main():
         action='store_true', 
         help=(
             'Run the pipeline for parquet files that contain the columns: '
-            '"citationid", "contexts", "source_id", "dest_id", source_doi", "dest_doi", "isinfluential"'
+            '"citationid", "contexts", "id", "dest", source_doi", "dest_doi", "isinfluential"'
         )
     )
     parser.add_argument("--output_format", type=str, choices=['json', 'parquet'], help="Format of output files", default="json")
