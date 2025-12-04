@@ -78,6 +78,8 @@ Other flags:
 - `--xml_mode`: Use TEI XML files (GROBID output) instead of PDFs.
 - `--parquet_mode`: Run the pipeline for parquet files instead of PDFs that contain the columns: "id", "citation_mentions".
 - `--filter_input`: Wildcard pattern to filter input files to analyze.
+- `--new_mode`: Use this to output more columns than what the legacy version offered. It will be removed in the future.
+- `--output_format`: Choose between "json", "parquet". Prefer parquet. For this option to have an effect, it must be combined with --new_mode flag. "json" option is still available for legacy reasons (it will be removed in the future).
 
 ## Conda
 
