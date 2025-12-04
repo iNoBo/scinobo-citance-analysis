@@ -526,9 +526,9 @@ def infer_parquet_new_mode(input_dir, output_dir, output_format: str, filter_inp
                 'citationid': row['citationid'],
                 'citation_mentions': cit_citances.tolist(),
                 'results': results,
-                "source_id": row['source_id'],
+                "source_id": row['id'],
+                "source_doi": row['doi'],
                 "dest_id": row['dest_id'],
-                "source_doi": row['source_doi'],
                 "dest_doi": row['dest_doi'],
                 "isinfluential": row['isinfluential']
             })
